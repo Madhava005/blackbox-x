@@ -8,3 +8,4 @@ data/*.db-shm
 .DS_Store
 infra/
 .pytest_cache/
+.pytest_cache/
