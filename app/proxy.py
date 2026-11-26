@@ -9,8 +9,15 @@ import httpx
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, Response
+from fastapi.responses import JSONResponse
 
-from app.db import init_db, log_wire_event
+from app.db import get_conn, init_db, log_wire_event
+from app.governance import (
+    LivePolicyController,
+    inspect_request_anomalies,
+    inspect_response_telemetry,
+    scrub_pii,
+)
 
 load_dotenv()
 
@@ -19,6 +26,8 @@ ANALYTICS_UPSTREAM = os.getenv("FLAGSMITH_ANALYTICS_URL", "http://localhost:8080
 CORE_PORT = int(os.getenv("PROXY_CORE_PORT", "9000"))
 ANALYTICS_PORT = int(os.getenv("PROXY_ANALYTICS_PORT", "9080"))
 DB_PATH = os.getenv("DB_PATH", "data/blackbox.db")
+
+POLICY = LivePolicyController()
 
 HOP_BY_HOP_HEADERS = {
     "connection",
@@ -51,8 +60,53 @@ def build_proxy_app(upstream_url: str, listen_port: int, role: str) -> FastAPI:
             "role": role,
             "listen_port": listen_port,
             "upstream": upstream_url,
-            "db_path": DB_PATH,
+            "strict_pii_block_mode": POLICY.is_strict_pii_block_enabled(),
         }
+
+    @app.get("/api/audit/export")
+    async def audit_export(limit: int = 50) -> JSONResponse:
+        conn = get_conn(DB_PATH)
+        logs = [
+            dict(r)
+            for r in conn.execute(
+                "SELECT * FROM wire_logs ORDER BY id DESC LIMIT ?", (limit,)
+            ).fetchall()
+        ]
+        anomalies = [
+            dict(r)
+            for r in conn.execute(
+                "SELECT * FROM anomalies ORDER BY id DESC LIMIT ?", (limit,)
+            ).fetchall()
+        ]
+        sessions = [
+            dict(r)
+            for r in conn.execute(
+                "SELECT * FROM experiment_sessions ORDER BY last_seen DESC LIMIT ?", (limit,)
+            ).fetchall()
+        ]
+        schemas = [
+            dict(r)
+            for r in conn.execute(
+                "SELECT * FROM schema_baselines ORDER BY feature_name ASC"
+            ).fetchall()
+        ]
+        conn.close()
+        return JSONResponse(
+            {
+                "exported_at": time.time(),
+                "strict_pii_block_mode": POLICY.is_strict_pii_block_enabled(),
+                "counts": {
+                    "wire_logs": len(logs),
+                    "anomalies": len(anomalies),
+                    "experiment_sessions": len(sessions),
+                    "schema_baselines": len(schemas),
+                },
+                "wire_logs": logs,
+                "anomalies": anomalies,
+                "experiment_sessions": sessions,
+                "schema_baselines": schemas,
+            }
+        )
 
     @app.api_route(
         "/{full_path:path}",
@@ -65,16 +119,62 @@ def build_proxy_app(upstream_url: str, listen_port: int, role: str) -> FastAPI:
         if request.url.query:
             req_path = f"{req_path}?{request.url.query}"
 
+        headers_lower = {k.lower(): v for k, v in request.headers.items()}
         fwd_headers = {
             k: v for k, v in request.headers.items() if k.lower() not in HOP_BY_HOP_HEADERS
         }
+
+        parsed_body: Any = None
+        redacted_fields: list[str] = []
+        outbound_body = raw_body
+        identifier: str | None = request.query_params.get("identifier")
+
+        if raw_body:
+            try:
+                parsed_body = json.loads(raw_body.decode("utf-8"))
+                if isinstance(parsed_body, dict) and parsed_body.get("identifier") is not None:
+                    identifier = str(parsed_body.get("identifier"))
+
+                cleaned_body, redacted_fields = scrub_pii(parsed_body)
+                if redacted_fields:
+                    if POLICY.is_strict_pii_block_enabled():
+                        latency_ms = (time.perf_counter() - start) * 1000.0
+                        log_wire_event(
+                            db_path=DB_PATH,
+                            port=listen_port,
+                            method=request.method,
+                            path=req_path,
+                            status_code=403,
+                            latency_ms=latency_ms,
+                            pii_redacted=True,
+                            quarantined=True,
+                            redacted_fields=redacted_fields,
+                            payload_preview=json.dumps(cleaned_body)[:1000],
+                        )
+                        return JSONResponse(
+                            status_code=403,
+                            content={
+                                "error": "strict_pii_block_mode_enforced",
+                                "message": "Payload quarantined by BlackBox X governance policy",
+                                "blocked_fields": redacted_fields,
+                            },
+                            headers={"x-blackbox-quarantined": "true"},
+                        )
+
+                    outbound_body = json.dumps(cleaned_body).encode("utf-8")
+                    fwd_headers["content-type"] = "application/json"
+                    parsed_body = cleaned_body
+            except Exception:
+                pass
+
+        inspect_request_anomalies(DB_PATH, listen_port, req_path, headers_lower, parsed_body)
 
         try:
             upstream_resp = await app.state.http.request(
                 method=request.method,
                 url=req_path,
                 headers=fwd_headers,
-                content=raw_body,
+                content=outbound_body,
             )
             resp_bytes = upstream_resp.content
             status_code = upstream_resp.status_code
@@ -93,6 +193,16 @@ def build_proxy_app(upstream_url: str, listen_port: int, role: str) -> FastAPI:
                 status_code = 502
                 resp_headers = {"content-type": "application/json"}
 
+        if resp_bytes:
+            try:
+                resp_json = json.loads(resp_bytes.decode("utf-8"))
+                inspect_response_telemetry(DB_PATH, listen_port, req_path, identifier, resp_json)
+            except Exception:
+                pass
+
+        if redacted_fields:
+            resp_headers["x-blackbox-pii-redacted"] = ",".join(redacted_fields)
+
         latency_ms = (time.perf_counter() - start) * 1000.0
         log_wire_event(
             db_path=DB_PATH,
@@ -101,7 +211,10 @@ def build_proxy_app(upstream_url: str, listen_port: int, role: str) -> FastAPI:
             path=req_path,
             status_code=status_code,
             latency_ms=latency_ms,
-            payload_preview=raw_body.decode("utf-8", errors="ignore")[:1000],
+            pii_redacted=bool(redacted_fields),
+            quarantined=False,
+            redacted_fields=redacted_fields,
+            payload_preview=outbound_body.decode("utf-8", errors="ignore")[:1000],
         )
 
         return Response(content=resp_bytes, status_code=status_code, headers=resp_headers)
