@@ -78,13 +78,15 @@ def scrub_pii(payload: Any, parent_key: str = "") -> tuple[Any, list[str]]:
 
     if isinstance(payload, dict):
         cleaned: dict[str, Any] = {}
+        trait_hint = str(payload.get("trait_key", "")).lower()
         for k, v in payload.items():
             key_lower = str(k).lower()
-            if key_lower in PII_KEYS and v not in (None, "", "[REDACTED]"):
+            effective_key = trait_hint if (key_lower == "trait_value" and trait_hint) else key_lower
+            if effective_key in PII_KEYS and v not in (None, "", "[REDACTED]"):
                 cleaned[k] = "[REDACTED]"
-                redacted_fields.append(str(k))
+                redacted_fields.append(effective_key)
             else:
-                sub_val, sub_fields = scrub_pii(v, key_lower)
+                sub_val, sub_fields = scrub_pii(v, effective_key)
                 cleaned[k] = sub_val
                 redacted_fields.extend(sub_fields)
         return cleaned, list(dict.fromkeys(redacted_fields))
