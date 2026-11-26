@@ -6,6 +6,7 @@ from app.governance import (
     inspect_request_anomalies,
     inspect_response_telemetry,
     scrub_pii,
+    scrub_query_params,
 )
 
 
@@ -62,3 +63,11 @@ def test_missing_environment_key_and_schema_drift():
     finally:
         if os.path.exists(db_path):
             os.remove(db_path)
+
+
+def test_scrub_query_params():
+    cleaned, redacted = scrub_query_params("identifier=alice@example.com&feature=checkout_flow_v2")
+    assert "alice%40example.com" not in cleaned
+    assert "alice@example.com" not in cleaned
+    assert "feature=checkout_flow_v2" in cleaned
+    assert redacted == ["identifier"]

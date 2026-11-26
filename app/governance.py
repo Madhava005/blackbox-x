@@ -4,6 +4,7 @@ import re
 import threading
 import time
 from typing import Any
+from urllib.parse import parse_qsl, urlencode
 
 from flagsmith import Flagsmith
 from flagsmith.models import DefaultFlag
@@ -71,6 +72,24 @@ class LivePolicyController:
                 except Exception:
                     pass
             return self._strict_block_cached
+
+
+def scrub_query_params(raw_query: str) -> tuple[str, list[str]]:
+    if not raw_query:
+        return "", []
+    pairs = parse_qsl(raw_query, keep_blank_values=True)
+    redacted_fields: list[str] = []
+    cleaned_pairs: list[tuple[str, str]] = []
+    for k, v in pairs:
+        key_lower = k.lower()
+        if (key_lower in PII_KEYS and v) or EMAIL_RE.match(v.strip()) or (
+            key_lower not in {"id", "value", "feature"} and PHONE_RE.match(v.strip())
+        ):
+            cleaned_pairs.append((k, "[REDACTED]"))
+            redacted_fields.append(k)
+        else:
+            cleaned_pairs.append((k, v))
+    return urlencode(cleaned_pairs), list(dict.fromkeys(redacted_fields))
 
 
 def scrub_pii(payload: Any, parent_key: str = "") -> tuple[Any, list[str]]:

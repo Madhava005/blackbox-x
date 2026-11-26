@@ -4,6 +4,7 @@ import os
 import time
 from contextlib import asynccontextmanager
 from typing import Any
+from urllib.parse import parse_qsl
 
 import httpx
 import uvicorn
@@ -17,6 +18,7 @@ from app.governance import (
     inspect_request_anomalies,
     inspect_response_telemetry,
     scrub_pii,
+    scrub_query_params,
 )
 
 load_dotenv()
@@ -116,9 +118,10 @@ def build_proxy_app(upstream_url: str, listen_port: int, role: str) -> FastAPI:
     async def forward(request: Request, full_path: str) -> Response:
         start = time.perf_counter()
         raw_body = await request.body()
+        cleaned_query, query_redacted = scrub_query_params(request.url.query)
         req_path = f"/{full_path}"
-        if request.url.query:
-            req_path = f"{req_path}?{request.url.query}"
+        if cleaned_query:
+            req_path = f"{req_path}?{cleaned_query}"
 
         headers_lower = {k.lower(): v for k, v in request.headers.items()}
         fwd_headers = {
@@ -126,9 +129,9 @@ def build_proxy_app(upstream_url: str, listen_port: int, role: str) -> FastAPI:
         }
 
         parsed_body: Any = None
-        redacted_fields: list[str] = []
+        redacted_fields: list[str] = list(query_redacted)
         outbound_body = raw_body
-        identifier: str | None = request.query_params.get("identifier")
+        identifier: str | None = dict(parse_qsl(cleaned_query)).get("identifier")
 
         if raw_body:
             try:
@@ -136,8 +139,9 @@ def build_proxy_app(upstream_url: str, listen_port: int, role: str) -> FastAPI:
                 if isinstance(parsed_body, dict) and parsed_body.get("identifier") is not None:
                     identifier = str(parsed_body.get("identifier"))
 
-                cleaned_body, redacted_fields = scrub_pii(parsed_body)
-                if redacted_fields:
+                cleaned_body, body_redacted = scrub_pii(parsed_body)
+                if body_redacted:
+                    redacted_fields = list(dict.fromkeys(redacted_fields + body_redacted))
                     if POLICY.is_strict_pii_block_enabled():
                         latency_ms = (time.perf_counter() - start) * 1000.0
                         log_wire_event(
