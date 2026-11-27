@@ -48,11 +48,40 @@ def run_stage_1_healthy_baseline(client: httpx.Client) -> None:
     print(f"  -> POST :9080/api/v1/analytics/flags/ [{r_ana.status_code}]")
 
 
+
+
+def run_stage_2_pii_leak_test(client: httpx.Client) -> None:
+    print("\n[Stage 2] PII Leak & Query Scrubbing Verification")
+    r_post = client.post(
+        f"{CORE_PROXY}/api/v1/identities/",
+        headers=_headers(),
+        json={
+            "identifier": "cust_pii_001",
+            "traits": [
+                {"trait_key": "email", "trait_value": "leak.user@example.com"},
+                {"trait_key": "phone", "trait_value": "+1-415-890-4321"},
+                {"trait_key": "plan", "trait_value": "enterprise"},
+            ],
+            "meta": {"ip": "203.0.113.77"},
+        },
+    )
+    redacted_hdr = r_post.headers.get("x-blackbox-pii-redacted", "none")
+    print(f"  -> POST /api/v1/identities/ (nested PII) [{r_post.status_code}] | redacted={redacted_hdr}")
+
+    r_get = client.get(
+        f"{CORE_PROXY}/api/v1/identities/",
+        params={"identifier": "query.leak@example.com"},
+        headers=_headers(),
+    )
+    q_redacted_hdr = r_get.headers.get("x-blackbox-pii-redacted", "none")
+    print(f"  -> GET /api/v1/identities/?identifier=<email> [{r_get.status_code}] | redacted={q_redacted_hdr}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="BlackBox X Traffic Simulator")
     parser.add_argument(
         "--stage",
-        choices=["1", "all"],
+        choices=["1", "2", "all"],
         default="all",
         help="Traffic stage to execute",
     )
@@ -61,6 +90,8 @@ def main() -> None:
     with httpx.Client(timeout=10.0) as client:
         if args.stage in {"1", "all"}:
             run_stage_1_healthy_baseline(client)
+        if args.stage in {"2", "all"}:
+            run_stage_2_pii_leak_test(client)
 
 
 if __name__ == "__main__":
