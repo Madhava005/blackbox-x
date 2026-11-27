@@ -8,7 +8,7 @@ BlackBox X is a zero-code, drop-in reverse proxy and governance layer for [Flags
 
 ## System Architecture
 
-![BlackBox X System Architecture](docs/architecture.png)
+![BlackBox X System Architecture](docs/architecture.svg)
 
 ---
 
