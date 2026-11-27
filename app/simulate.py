@@ -1,6 +1,7 @@
 import argparse
 import os
 import time
+import uuid
 
 import httpx
 from dotenv import load_dotenv
@@ -77,11 +78,45 @@ def run_stage_2_pii_leak_test(client: httpx.Client) -> None:
     print(f"  -> GET /api/v1/identities/?identifier=<email> [{r_get.status_code}] | redacted={q_redacted_hdr}")
 
 
+
+
+def run_stage_3_broken_experiments(client: httpx.Client) -> None:
+    print("\n[Stage 3] Broken Experiment & Telemetry Anomaly Simulation")
+    r_nokey = client.get(f"{CORE_PROXY}/api/v1/flags/", headers=_headers(include_key=False))
+    print(f"  -> GET /api/v1/flags/ (missing X-Environment-Key) [{r_nokey.status_code}]")
+
+    for _ in range(3):
+        ephemeral_id = f"anon_{uuid.uuid4()}"
+        r_churn = client.post(
+            f"{CORE_PROXY}/api/v1/identities/",
+            headers=_headers(),
+            json={"identifier": ephemeral_id, "traits": []},
+        )
+        print(f"  -> POST /api/v1/identities/ (ephemeral UUID {ephemeral_id[:16]}...) [{r_churn.status_code}]")
+
+    r_neg = client.post(
+        f"{ANALYTICS_PROXY}/api/v1/analytics/flags/",
+        headers=_headers(),
+        json={"checkout_flow_v2": -5},
+    )
+    print(f"  -> POST :9080/api/v1/analytics/flags/ (negative count) [{r_neg.status_code}]")
+
+    r_orphan = client.post(
+        f"{CORE_PROXY}/api/v1/identities/",
+        headers=_headers(),
+        json={
+            "identifier": "ghost_buyer_999",
+            "traits": [{"trait_key": "conversion", "trait_value": 1}],
+        },
+    )
+    print(f"  -> POST /api/v1/identities/ (orphaned conversion) [{r_orphan.status_code}]")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="BlackBox X Traffic Simulator")
     parser.add_argument(
         "--stage",
-        choices=["1", "2", "all"],
+        choices=["1", "2", "3", "all"],
         default="all",
         help="Traffic stage to execute",
     )
@@ -92,6 +127,8 @@ def main() -> None:
             run_stage_1_healthy_baseline(client)
         if args.stage in {"2", "all"}:
             run_stage_2_pii_leak_test(client)
+        if args.stage in {"3", "all"}:
+            run_stage_3_broken_experiments(client)
 
 
 if __name__ == "__main__":
