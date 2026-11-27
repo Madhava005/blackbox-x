@@ -1,14 +1,14 @@
-# BlackBox X
+# BlackBox-X
 
-**High-Concurrency Governance, PII Firewall & Telemetry-Drift Sidecar Proxy for Flagsmith**
+**High-Concurrency Governance, PII Firewall & Self-Healing Telemetry-Drift Sidecar Proxy for Flagsmith**
 
-BlackBox X is a zero-code, drop-in reverse proxy and governance layer for [Flagsmith](https://github.com/Flagsmith/flagsmith). Sitting transparently between your application SDKs and Flagsmith's Core (`:8000`) and Analytics (`:8080`) backends, it intercepts wire traffic in real time to mask sensitive PII, quarantine non-compliant payloads at the edge, catch broken experiment telemetry, and lock remote-config schemas against unexpected type drift.
+BlackBox-X is a zero-code, drop-in reverse proxy and governance layer for [Flagsmith](https://github.com/Flagsmith/flagsmith). Sitting transparently between your application SDKs and Flagsmith's Core (`:8000`) and Analytics (`:8080`) backends, it intercepts wire traffic in real time to mask sensitive PII, quarantine non-compliant payloads at the edge, catch broken experiment telemetry, and lock remote-config schemas against unexpected type drift.
 
 ---
 
 ## System Architecture
 
-![BlackBox X System Architecture](docs/architecture.svg)
+![BlackBox-X System Architecture](docs/architecture.svg)
 
 ---
 
@@ -31,8 +31,8 @@ git clone https://github.com/Madhava005/blackbox-x.git
 Cd blackbox-x
 docker compose up -d --build
 ```
-* **BlackBox X Core Proxy & Dashboard:** `http://localhost:9000` (`http://localhost:9000/dashboard`)
-* **BlackBox X Analytics Proxy:** `http://localhost:9080`
+* **BlackBox-X Core Proxy & Dashboard:** `http://localhost:9000` (`http://localhost:9000/dashboard`)
+* **BlackBox-X Analytics Proxy:** `http://localhost:9080`
 * **Upstream Flagsmith Core / UI:** `http://localhost:8000`
 
 ### 2. Run the 4-Stage Traffic & Drift Simulator
@@ -59,7 +59,7 @@ from flagsmith import Flagsmith
 
 flagsmith = Flagsmith(
     environment_key="YOUR_CLIENT_SIDE_ENV_KEY",
-    api_url="http://localhost:9000/api/v1/",  # Point SDK to BlackBox X
+    api_url="http://localhost:9000/api/v1/",  # Point SDK to BlackBox-X
 )
 ```
 
@@ -76,7 +76,7 @@ docker compose exec blackbox-x pytest -v
 
 ### Active Self-Healing Schema Guard & 1-Command Judge Verification
 
-- **Autonomous Payload Healing (`X-BlackBox-Healed`):** Once BlackBox X learns a feature flag baseline type (e.g., `str`), unexpected type mutations (`str -> dict/int`) are intercepted in real time, logged (`SCHEMA_DRIFT_DETECTED` + `SCHEMA_DRIFT_HEALED`), and replaced on the wire with the last-known-good value so client SDKs never crash.
+- **Autonomous Payload Healing (`X-BlackBox-Healed`):** Once BlackBox-X learns a feature flag baseline type (e.g., `str`), unexpected type mutations (`str -> dict/int`) are intercepted in real time, logged (`SCHEMA_DRIFT_DETECTED` + `SCHEMA_DRIFT_HEALED`), and replaced on the wire with the last-known-good value so client SDKs never crash.
 - **Live `/dashboard` Controls:** Toggle **PII FIREWALL** (`REDACT MODE` vs `403 STRICT BLOCK`) and **SCHEMA HEALER** (`HEAL ON` vs `PASS-THRU`) live without restarting the proxy.
 - **1-Command Judge Verification:** `python -m app.cli --verify`
 
@@ -99,7 +99,7 @@ blackbox-x/
      -- cli.py           # Rich terminal audit report generator
 !-- infra/               # Infrastructure & upstream Flagsmith stack configs
 !-- tests/               # Pytest unit & simulator verification suite (8/8 passing)
-!-- docker-compose.yml   # Unified Flagsmith + BlackBox X orchestration
+!-- docker-compose.yml   # Unified Flagsmith + BlackBox-X orchestration
 !-- Dockerfile           # Lightweight Python 3.10 runtime container
 !-- pytest.ini           # Pytest configuration
 !-- README(A.md
