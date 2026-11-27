@@ -90,17 +90,17 @@ docker compose exec blackbox-x pytest -v
 
 ```text
 blackbox-x/
-!-- app/
-     -- proxy.py         # Dual-port FastAPI proxy (:9000/:9080) & policy APIs
-     -- governance.py    # Recursive PII redactor, self-healing schema guard & anomaly engine
-     -- dashboard.py     # Single-file embedded command-center web UI (/dashboard)
-     -- db.py            # Thread-safe SQLite WAL-mode persistence layer
-     -- simulate.py      # 4-stage production traffic & schema-drift simulator
-     -- cli.py           # Rich terminal audit report & --verify judge check
-!-- infra/               # Infrastructure & upstream Flagsmith stack configs
-!-- tests/               # Pytest unit & simulator verification suite (10/10 passing)
-!-- docker-compose.yml   # Unified Flagsmith + BlackBox-X orchestration
-!-- Dockerfile           # Lightweight Python 3.10 runtime container
-!-- pytest.ini           # Pytest configuration
-!-- README(A.md
+├── app/
+│   ├── proxy.py         # Dual-port FastAPI proxy (:9000/:9080) & policy APIs
+│   ├── governance.py    # Recursive PII redactor, self-healing schema guard & anomaly engine
+│   ├── dashboard.py     # Single-file embedded command-center web UI (/dashboard)
+│   ├── db.py            # Thread-safe SQLite WAL-mode persistence layer
+│   ├── simulate.py      # 4-stage production traffic & schema-drift simulator
+│   ├── cli.py           # Rich terminal audit report & --verify judge check
+├── infra/               # Infrastructure & upstream Flagsmith stack configs
+├── tests/               # Pytest unit & simulator verification suite (10/10 passing)
+├── docker-compose.yml   # Unified Flagsmith + BlackBox-X orchestration
+├── Dockerfile           # Lightweight Python 3.10 runtime container
+├── pytest.ini           # Pytest configuration
+├── README.md
 ```
