@@ -76,7 +76,7 @@ docker compose exec blackbox-x pytest -v
 
 ## Upstream Flagsmith Contribution
 
-* **Upstream PR:** [Link to Flagsmith PR -- updating upon submission]
+* **Upstream PR:** [Flagsmith/flagsmith#9147](https://github.com/Flagsmith/flagsmith/pull/9147)
 
 ---
 
