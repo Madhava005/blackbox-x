@@ -111,6 +111,18 @@ def build_proxy_app(upstream_url: str, listen_port: int, role: str) -> FastAPI:
             }
         )
 
+    @app.post("/api/simulate/telemetry")
+    async def simulate_telemetry(request: Request) -> JSONResponse:
+        body = await request.json()
+        inspect_response_telemetry(
+            DB_PATH,
+            listen_port,
+            body.get("path", "/api/v1/flags/"),
+            body.get("identifier"),
+            body.get("flags", []),
+        )
+        return JSONResponse({"status": "recorded"})
+
     @app.api_route(
         "/{full_path:path}",
         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],

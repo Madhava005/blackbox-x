@@ -6,8 +6,6 @@ import uuid
 import httpx
 from dotenv import load_dotenv
 
-DB_PATH = os.getenv("BLACKBOX_DB_PATH", "data/blackbox.db")
-from app.governance import inspect_response_telemetry
 
 load_dotenv()
 
@@ -134,16 +132,23 @@ def run_stage_4_schema_drift(client: httpx.Client) -> None:
             "feature_state_value": 16711680,
         },
     ]
-    inspect_response_telemetry(DB_PATH, 9000, "/api/v1/flags/", "cust_drift_001", mutated_snapshot)
-    print("  -> Injected mutated flag types (checkout_flow_v2: str -> dict, button_color: str -> int)")
+    r_mut = client.post(
+        f"{CORE_PROXY}/api/simulate/telemetry",
+        headers=_headers(),
+        json={"path": "/api/v1/flags/", "identifier": "cust_drift_001", "flags": mutated_snapshot},
+    )
+    print(f"  -> POST /api/simulate/telemetry (str -> dict/int drift) [{r_mut.status_code}]")
 
-    # Restore baseline str types so subsequent demo runs also detect fresh drift
     restored_snapshot = [
         {"feature": {"name": "checkout_flow_v2"}, "enabled": True, "feature_state_value": "control"},
         {"feature": {"name": "button_color"}, "enabled": True, "feature_state_value": "#00FF00"},
     ]
-    inspect_response_telemetry(DB_PATH, 9000, "/api/v1/flags/", None, restored_snapshot)
-    print("  -> Baseline schema restored for repeatable demo runs")
+    r_rest = client.post(
+        f"{CORE_PROXY}/api/simulate/telemetry",
+        headers=_headers(),
+        json={"path": "/api/v1/flags/", "identifier": None, "flags": restored_snapshot},
+    )
+    print(f"  -> POST /api/simulate/telemetry (baseline schema restored) [{r_rest.status_code}]")
 
 
 def main() -> None:
