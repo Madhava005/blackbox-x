@@ -51,7 +51,8 @@ def build_proxy_app(upstream_url: str, listen_port: int, role: str) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         init_db(DB_PATH)
-        app.state.http = httpx.AsyncClient(base_url=upstream_url, timeout=15.0)
+        limits = httpx.Limits(max_connections=200, max_keepalive_connections=50)
+        app.state.http = httpx.AsyncClient(base_url=upstream_url, timeout=30.0, limits=limits)
         yield
         await app.state.http.aclose()
 
@@ -168,7 +169,8 @@ def build_proxy_app(upstream_url: str, listen_port: int, role: str) -> FastAPI:
                     redacted_fields = list(dict.fromkeys(redacted_fields + body_redacted))
                     if POLICY.is_strict_pii_block_enabled():
                         latency_ms = (time.perf_counter() - start) * 1000.0
-                        log_wire_event(
+                        await asyncio.to_thread(
+                            log_wire_event,
                             db_path=DB_PATH,
                             port=listen_port,
                             method=request.method,
@@ -196,7 +198,7 @@ def build_proxy_app(upstream_url: str, listen_port: int, role: str) -> FastAPI:
             except Exception:
                 pass
 
-        inspect_request_anomalies(DB_PATH, listen_port, req_path, headers_lower, parsed_body)
+        await asyncio.to_thread(inspect_request_anomalies, DB_PATH, listen_port, req_path, headers_lower, parsed_body)
 
         try:
             upstream_resp = await app.state.http.request(
@@ -225,7 +227,7 @@ def build_proxy_app(upstream_url: str, listen_port: int, role: str) -> FastAPI:
         if resp_bytes:
             try:
                 resp_json = json.loads(resp_bytes.decode("utf-8"))
-                inspect_response_telemetry(DB_PATH, listen_port, req_path, identifier, resp_json)
+                await asyncio.to_thread(inspect_response_telemetry, DB_PATH, listen_port, req_path, identifier, resp_json)
             except Exception:
                 pass
 
@@ -233,7 +235,8 @@ def build_proxy_app(upstream_url: str, listen_port: int, role: str) -> FastAPI:
             resp_headers["x-blackbox-pii-redacted"] = ",".join(redacted_fields)
 
         latency_ms = (time.perf_counter() - start) * 1000.0
-        log_wire_event(
+        await asyncio.to_thread(
+            log_wire_event,
             db_path=DB_PATH,
             port=listen_port,
             method=request.method,
