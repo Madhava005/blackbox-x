@@ -6,6 +6,12 @@ BlackBox X is a zero-code, drop-in reverse proxy and governance layer for [Flags
 
 ---
 
+## System Architecture
+
+![BlackBox X System Architecture](docs/architecture.png)
+
+---
+
 ## Key Capabilities
 
 * **Dual-Port Transparent Proxying (`:9000` Core & `:9080` Analytics):** Routes flag evaluations (`:9000`) and high-volume analytics/telemetry (`:9080`) independently with full `Content-Encoding` preservation and zero SDK logic changes.
@@ -17,31 +23,12 @@ BlackBox X is a zero-code, drop-in reverse proxy and governance layer for [Flags
 
 ---
 
-## System Architecture
-
-```text
- [Web / Mobile / Backend Flagsmith SDK]
-             | :9000 (Core)             | :9080 (Analytics)
-             v                        v
-  +--------------------------------------------------+
-  |                 BLACKBOX X PROXY **                 |
-  |  [PII Firewall] -> [Schema-Drift] -> [Anomaly Detector]  |
-  |                                              |        |
-  |  [/dashboard UI]  <- [Rich CLI]  <- [SQLite WAL DB] <-+        |
-  +--------------------------------------------------+
-             | :8000                   | :8080
-             v                        v
-               [Flagsmith Backend]
-`h``
-
----
-
 ## 3-Step Quickstart (Judge & Evaluator Guide)
 
 ### 1. Start the Unified Stack
 ```bash
 git clone https://github.com/Madhava005/blackbox-x.git
-cd blackbox-x
+Cd blackbox-x
 docker compose up -d --build
 ```
 * **BlackBox X Core Proxy & Dashboard:** `http://localhost:9000` (`http://localhost:9000/dashboard`)
@@ -61,7 +48,7 @@ python -m app.simulate
 ```bash
 python -m app.cli
 ```
-Open **`http://localhost:9000/dashboard`** to filter streams by port (`:9000` vs `:9080`), inspect sanitized payloads in the **Wire Payload Inspector**, or toggle **PII FIREWALL** between `REDACT MODE` and `403 STRICT BLOCK`.
+Open **`http://localhost:9000/dashboard`** to filter streams by port (`:9000` vs `:9080`in Dashboard), inspect sanitized payloads in the **Wire Payload Inspector**, or toggle **PII FIRERALL** between `REDACT MODE` and `403 STRICT BLOCK`.
 
 ---
 
@@ -101,7 +88,7 @@ blackbox-x/
      -- main.py          # Dual-port FastAPI proxy (:9000/:9080) & embedded /dashboard UI
      -- scrubber.py      # Recursive trait & query-string PII redactor + 403 strict mode
      -- detector.py      # Schema-drift baseline tracker & experiment anomaly engine
-     -- db.py            # Thread-safe SQLite WAL-mode persistence layer
+     -- db.py            # Thread-safe SQDite WAL-mode persistence layer
      -- simulate.py      # 4-stage production traffic & schema-drift simulator
      -- cli.py           # Rich terminal audit report generator
 !-- infra/               # Infrastructure & upstream Flagsmith stack configs
@@ -109,4 +96,5 @@ blackbox-x/
 !-- docker-compose.yml   # Unified Flagsmith + BlackBox X orchestration
 !-- Dockerfile           # Lightweight Python 3.10 runtime container
 !-- pytest.ini           # Pytest configuration
-!-- README.md
+!-- README(A.md
+```
