@@ -6,6 +6,9 @@ import uuid
 import httpx
 from dotenv import load_dotenv
 
+from app.db import DB_PATH
+from app.governance import inspect_response_telemetry
+
 load_dotenv()
 
 CORE_PROXY = f"http://localhost:{os.getenv('PROXY_CORE_PORT', '9000')}"
@@ -112,11 +115,42 @@ def run_stage_3_broken_experiments(client: httpx.Client) -> None:
     print(f"  -> POST /api/v1/identities/ (orphaned conversion) [{r_orphan.status_code}]")
 
 
+
+
+def run_stage_4_schema_drift(client: httpx.Client) -> None:
+    print("\n[Stage 4] Remote Config Schema-Drift Mutation Injection")
+    r_base = client.get(f"{CORE_PROXY}/api/v1/flags/", headers=_headers())
+    print(f"  -> GET /api/v1/flags/ (baseline check) [{r_base.status_code}]")
+
+    mutated_snapshot = [
+        {
+            "feature": {"name": "checkout_flow_v2"},
+            "enabled": True,
+            "feature_state_value": {"variant": "v2_experiment", "rollout_pct": 100},
+        },
+        {
+            "feature": {"name": "button_color"},
+            "enabled": True,
+            "feature_state_value": 16711680,
+        },
+    ]
+    inspect_response_telemetry(DB_PATH, 9000, "/api/v1/flags/", "cust_drift_001", mutated_snapshot)
+    print("  -> Injected mutated flag types (checkout_flow_v2: str -> dict, button_color: str -> int)")
+
+    # Restore baseline str types so subsequent demo runs also detect fresh drift
+    restored_snapshot = [
+        {"feature": {"name": "checkout_flow_v2"}, "enabled": True, "feature_state_value": "control"},
+        {"feature": {"name": "button_color"}, "enabled": True, "feature_state_value": "#00FF00"},
+    ]
+    inspect_response_telemetry(DB_PATH, 9000, "/api/v1/flags/", None, restored_snapshot)
+    print("  -> Baseline schema restored for repeatable demo runs")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="BlackBox X Traffic Simulator")
     parser.add_argument(
         "--stage",
-        choices=["1", "2", "3", "all"],
+        choices=["1", "2", "3", "4", "all"],
         default="all",
         help="Traffic stage to execute",
     )
@@ -129,6 +163,8 @@ def main() -> None:
             run_stage_2_pii_leak_test(client)
         if args.stage in {"3", "all"}:
             run_stage_3_broken_experiments(client)
+        if args.stage in {"4", "all"}:
+            run_stage_4_schema_drift(client)
 
 
 if __name__ == "__main__":
