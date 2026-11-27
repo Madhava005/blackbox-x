@@ -41,6 +41,7 @@ class LivePolicyController:
         self._client: Flagsmith | None = None
         self._strict_block_cached = False
         self._manual_override: bool | None = None
+        self._self_heal_enabled = True
         self._last_check = 0.0
         self._lock = threading.Lock()
         self._init_client()
@@ -66,6 +67,15 @@ class LivePolicyController:
             if enabled is not None:
                 self._strict_block_cached = bool(enabled)
             return self.is_strict_pii_block_enabled() if enabled is None else self._strict_block_cached
+
+    def set_self_heal_mode(self, enabled: bool) -> bool:
+        with self._lock:
+            self._self_heal_enabled = bool(enabled)
+            return self._self_heal_enabled
+
+    def is_self_heal_enabled(self) -> bool:
+        with self._lock:
+            return self._self_heal_enabled
 
     def is_strict_pii_block_enabled(self) -> bool:
         now = time.time()
@@ -227,8 +237,13 @@ def inspect_request_anomalies(
 
 
 def inspect_response_telemetry(
-    db_path: str, port: int, path: str, identifier: str | None, resp_json: Any
-) -> None:
+    db_path: str,
+    port: int,
+    path: str,
+    identifier: str | None,
+    resp_json: Any,
+    self_heal: bool = True,
+) -> list[str]:
     flags_list: list[dict[str, Any]] = []
     if isinstance(resp_json, list):
         flags_list = [item for item in resp_json if isinstance(item, dict)]
@@ -236,8 +251,9 @@ def inspect_response_telemetry(
         flags_list = [item for item in resp_json["flags"] if isinstance(item, dict)]
 
     if not flags_list:
-        return
+        return []
 
+    healed_features: list[str] = []
     now = time.time()
     conn = get_conn(db_path)
     for item in flags_list:
@@ -257,10 +273,6 @@ def inspect_response_telemetry(
                 (fname, val_type, json.dumps(val), now),
             )
         elif baseline["expected_type"] != val_type:
-            conn.execute(
-                "UPDATE schema_baselines SET expected_type = ?, last_value = ?, updated_ts = ? WHERE feature_name = ?",
-                (val_type, json.dumps(val), now, fname),
-            )
             conn.commit()
             log_anomaly(
                 db_path,
@@ -268,6 +280,29 @@ def inspect_response_telemetry(
                 "CRITICAL",
                 port,
                 f"Feature '{fname}' mutated type from {baseline['expected_type']} ({baseline['last_value']}) -> {val_type} ({json.dumps(val)})",
+            )
+            if self_heal and baseline["last_value"] is not None:
+                safe_val = json.loads(baseline["last_value"])
+                item["feature_state_value"] = safe_val
+                val = safe_val
+                healed_features.append(fname)
+                log_anomaly(
+                    db_path,
+                    "SCHEMA_DRIFT_HEALED",
+                    "CRITICAL",
+                    port,
+                    f"Self-healed '{fname}': blocked {val_type} mutation and restored {baseline['expected_type']} ({baseline['last_value']})",
+                )
+            else:
+                conn.execute(
+                    "UPDATE schema_baselines SET expected_type = ?, last_value = ?, updated_ts = ? WHERE feature_name = ?",
+                    (val_type, json.dumps(val), now, fname),
+                )
+                conn.commit()
+        else:
+            conn.execute(
+                "UPDATE schema_baselines SET last_value = ?, updated_ts = ? WHERE feature_name = ?",
+                (json.dumps(val), now, fname),
             )
 
         if identifier and fname == "checkout_flow_v2" and val is not None:
@@ -323,3 +358,4 @@ def inspect_response_telemetry(
 
     conn.commit()
     conn.close()
+    return healed_features

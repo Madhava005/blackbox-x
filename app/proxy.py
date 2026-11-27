@@ -66,6 +66,7 @@ def build_proxy_app(upstream_url: str, listen_port: int, role: str) -> FastAPI:
             "listen_port": listen_port,
             "upstream": upstream_url,
             "strict_pii_block_mode": POLICY.is_strict_pii_block_enabled(),
+            "self_heal_enabled": POLICY.is_self_heal_enabled(),
         }
 
     @app.get("/dashboard", response_class=HTMLResponse)
@@ -78,6 +79,12 @@ def build_proxy_app(upstream_url: str, listen_port: int, role: str) -> FastAPI:
         enabled = body.get("enabled")
         active = POLICY.set_strict_pii_block_mode(None if enabled is None else bool(enabled))
         return JSONResponse({"strict_pii_block_mode": active})
+
+    @app.post("/api/policy/self-heal")
+    async def toggle_self_heal(request: Request) -> JSONResponse:
+        body = await request.json()
+        active = POLICY.set_self_heal_mode(bool(body.get("enabled", True)))
+        return JSONResponse({"self_heal_enabled": active})
 
     @app.get("/api/audit/export")
     async def audit_export(limit: int = 50) -> JSONResponse:
@@ -111,6 +118,7 @@ def build_proxy_app(upstream_url: str, listen_port: int, role: str) -> FastAPI:
             {
                 "exported_at": time.time(),
                 "strict_pii_block_mode": POLICY.is_strict_pii_block_enabled(),
+            "self_heal_enabled": POLICY.is_self_heal_enabled(),
                 "counts": {
                     "wire_logs": len(logs),
                     "anomalies": len(anomalies),
@@ -224,10 +232,23 @@ def build_proxy_app(upstream_url: str, listen_port: int, role: str) -> FastAPI:
                 status_code = 502
                 resp_headers = {"content-type": "application/json"}
 
+        healed_features: list[str] = []
         if resp_bytes:
             try:
                 resp_json = json.loads(resp_bytes.decode("utf-8"))
-                await asyncio.to_thread(inspect_response_telemetry, DB_PATH, listen_port, req_path, identifier, resp_json)
+                healed_features = await asyncio.to_thread(
+                    inspect_response_telemetry,
+                    DB_PATH,
+                    listen_port,
+                    req_path,
+                    identifier,
+                    resp_json,
+                    POLICY.is_self_heal_enabled(),
+                )
+                if healed_features:
+                    resp_bytes = json.dumps(resp_json).encode("utf-8")
+                    resp_headers["content-type"] = "application/json"
+                    resp_headers["x-blackbox-healed"] = ",".join(healed_features)
             except Exception:
                 pass
 

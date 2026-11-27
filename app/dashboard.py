@@ -210,6 +210,15 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         <span class="switch-state mono" id="strict-label" style="color: var(--ok);">REDACT MODE</span>
       </div>
 
+      <div class="switch-box" title="Automatically restore last-known-good flag values when upstream mutates schema types">
+        <span class="switch-label">SCHEMA HEALER</span>
+        <label class="toggle">
+          <input type="checkbox" id="heal-toggle" checked onchange="toggleSelfHeal(this.checked)" />
+          <span class="slider ok"></span>
+        </label>
+        <span class="switch-state mono" id="heal-label" style="color: var(--ok);">HEAL ON</span>
+      </div>
+
       <div class="switch-box">
         <span class="switch-label">AUTO-POLL (5s)</span>
         <label class="toggle">
@@ -362,8 +371,36 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         });
         const data = await res.json();
         updateStrictUI(data.strict_pii_block_mode);
+        updateHealUI(data.self_heal_enabled);
       } catch (e) {
         updateStrictUI(!enabled);
+      }
+    }
+
+    function updateHealUI(enabled) {
+      const toggle = document.getElementById("heal-toggle");
+      const label = document.getElementById("heal-label");
+      toggle.checked = Boolean(enabled);
+      if (enabled) {
+        label.textContent = "HEAL ON";
+        label.style.color = "var(--ok)";
+      } else {
+        label.textContent = "PASS-THRU";
+        label.style.color = "var(--warn)";
+      }
+    }
+
+    async function toggleSelfHeal(enabled) {
+      try {
+        const res = await fetch("/api/policy/self-heal", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ enabled }),
+        });
+        const data = await res.json();
+        updateHealUI(data.self_heal_enabled);
+      } catch (e) {
+        updateHealUI(!enabled);
       }
     }
 
@@ -440,6 +477,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         document.getElementById("cnt-sess").textContent = data.counts.experiment_sessions;
         document.getElementById("cnt-schema").textContent = data.counts.schema_baselines;
         updateStrictUI(data.strict_pii_block_mode);
+        updateHealUI(data.self_heal_enabled);
         document.getElementById("last-sync").textContent = "Updated " + new Date().toLocaleTimeString();
         renderTables(data);
       } catch (err) {

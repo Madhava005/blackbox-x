@@ -74,6 +74,12 @@ docker compose exec blackbox-x pytest -v
 
 ---
 
+### Active Self-Healing Schema Guard & 1-Command Judge Verification
+
+- **Autonomous Payload Healing (`X-BlackBox-Healed`):** Once BlackBox X learns a feature flag baseline type (e.g., `str`), unexpected type mutations (`str -> dict/int`) are intercepted in real time, logged (`SCHEMA_DRIFT_DETECTED` + `SCHEMA_DRIFT_HEALED`), and replaced on the wire with the last-known-good value so client SDKs never crash.
+- **Live `/dashboard` Controls:** Toggle **PII FIREWALL** (`REDACT MODE` vs `403 STRICT BLOCK`) and **SCHEMA HEALER** (`HEAL ON` vs `PASS-THRU`) live without restarting the proxy.
+- **1-Command Judge Verification:** `python -m app.cli --verify`
+
 ## Upstream Flagsmith Contribution
 
 * **Upstream PR:** [Flagsmith/flagsmith#9147](https://github.com/Flagsmith/flagsmith/pull/9147)

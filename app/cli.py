@@ -87,10 +87,37 @@ def render_audit(data: dict) -> None:
     console.print(wire_table)
 
 
+def verify_stack() -> None:
+    with httpx.Client(timeout=10.0) as client:
+        h = client.get(f"{CORE_PROXY}/health")
+        h.raise_for_status()
+        health = h.json()
+        exp = client.get(f"{CORE_PROXY}/api/audit/export", params={"limit": 50})
+        exp.raise_for_status()
+        data = exp.json()
+        counts = data.get("counts", {})
+        healed = sum(1 for a in data.get("anomalies", []) if a.get("code") == "SCHEMA_DRIFT_HEALED")
+        console.print(
+            Panel(
+                f"[bold green]PASS[/bold green] — Proxy healthy on :{health.get('listen_port')} | "
+                f"Self-Heal: [bold cyan]{health.get('self_heal_enabled')}[/bold cyan] | "
+                f"Wire Logs: {counts.get('wire_logs', 0)} | "
+                f"Anomalies: {counts.get('anomalies', 0)} (Healed: {healed})",
+                title="BlackBox X — Judge Verification Check",
+                border_style="green",
+            )
+        )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="BlackBox X Terminal Audit CLI")
     parser.add_argument("--limit", type=int, default=25, help="Max records to fetch from /api/audit/export")
+    parser.add_argument("--verify", action="store_true", help="Run 1-command health & governance verification")
     args = parser.parse_args()
+
+    if args.verify:
+        verify_stack()
+        return
 
     with httpx.Client(timeout=10.0) as client:
         resp = client.get(f"{CORE_PROXY}/api/audit/export", params={"limit": args.limit})
