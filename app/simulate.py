@@ -6,7 +6,7 @@ import uuid
 import httpx
 from dotenv import load_dotenv
 
-from app.db import DB_PATH
+DB_PATH = os.getenv("BLACKBOX_DB_PATH", "data/blackbox.db")
 from app.governance import inspect_response_telemetry
 
 load_dotenv()
