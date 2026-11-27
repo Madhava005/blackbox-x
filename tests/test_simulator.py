@@ -42,7 +42,7 @@ def test_stage_4_logs_schema_drift_and_restores_baseline(monkeypatch):
 
         conn = get_conn(db_path)
         drifts = conn.execute(
-            "SELECT * FROM anomalies WHERE category = 'SCHEMA_DRIFT_DETECTED'"
+            "SELECT * FROM anomalies WHERE code = 'SCHEMA_DRIFT_DETECTED'"
         ).fetchall()
         baseline = conn.execute(
             "SELECT expected_type FROM schema_baselines WHERE feature_name = 'checkout_flow_v2'"
