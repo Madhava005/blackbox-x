@@ -247,16 +247,17 @@ def inspect_response_telemetry(
                 (fname, val_type, json.dumps(val), now),
             )
         elif baseline["expected_type"] != val_type:
+            conn.execute(
+                "UPDATE schema_baselines SET expected_type = ?, last_value = ?, updated_ts = ? WHERE feature_name = ?",
+                (val_type, json.dumps(val), now, fname),
+            )
+            conn.commit()
             log_anomaly(
                 db_path,
                 "SCHEMA_DRIFT_DETECTED",
                 "CRITICAL",
                 port,
                 f"Feature '{fname}' mutated type from {baseline['expected_type']} ({baseline['last_value']}) -> {val_type} ({json.dumps(val)})",
-            )
-            conn.execute(
-                "UPDATE schema_baselines SET expected_type = ?, last_value = ?, updated_ts = ? WHERE feature_name = ?",
-                (val_type, json.dumps(val), now, fname),
             )
 
         if identifier and fname == "checkout_flow_v2" and val is not None:
