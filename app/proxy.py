@@ -66,6 +66,10 @@ def build_proxy_app(upstream_url: str, listen_port: int, role: str) -> FastAPI:
             "strict_pii_block_mode": POLICY.is_strict_pii_block_enabled(),
         }
 
+    @app.get("/dashboard", response_class=HTMLResponse)
+    async def dashboard_view() -> HTMLResponse:
+        return HTMLResponse(content=DASHBOARD_HTML)
+
     @app.get("/api/audit/export")
     async def audit_export(limit: int = 50) -> JSONResponse:
         conn = get_conn(DB_PATH)
