@@ -40,6 +40,7 @@ class LivePolicyController:
         self.refresh_interval = int(os.getenv("REFRESH_INTERVAL_SECONDS", "15"))
         self._client: Flagsmith | None = None
         self._strict_block_cached = False
+        self._manual_override: bool | None = None
         self._last_check = 0.0
         self._lock = threading.Lock()
         self._init_client()
@@ -59,9 +60,18 @@ class LivePolicyController:
             except Exception:
                 self._client = None
 
+    def set_strict_pii_block_mode(self, enabled: bool | None) -> bool:
+        with self._lock:
+            self._manual_override = enabled
+            if enabled is not None:
+                self._strict_block_cached = bool(enabled)
+            return self.is_strict_pii_block_enabled() if enabled is None else self._strict_block_cached
+
     def is_strict_pii_block_enabled(self) -> bool:
         now = time.time()
         with self._lock:
+            if self._manual_override is not None:
+                return self._manual_override
             if self._client is None:
                 self._init_client()
             if self._client is not None and (now - self._last_check) >= 2.0:
