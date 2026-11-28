@@ -371,7 +371,6 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         });
         const data = await res.json();
         updateStrictUI(data.strict_pii_block_mode);
-        updateHealUI(data.self_heal_enabled);
       } catch (e) {
         updateStrictUI(!enabled);
       }

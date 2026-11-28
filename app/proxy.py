@@ -113,16 +113,19 @@ def build_proxy_app(upstream_url: str, listen_port: int, role: str) -> FastAPI:
                 "SELECT * FROM schema_baselines ORDER BY feature_name ASC"
             ).fetchall()
         ]
+        total_wire = conn.execute("SELECT COUNT(*) FROM wire_logs").fetchone()[0]
+        total_anomalies = conn.execute("SELECT COUNT(*) FROM anomalies").fetchone()[0]
+        total_sessions = conn.execute("SELECT COUNT(*) FROM experiment_sessions").fetchone()[0]
         conn.close()
         return JSONResponse(
             {
                 "exported_at": time.time(),
                 "strict_pii_block_mode": POLICY.is_strict_pii_block_enabled(),
-            "self_heal_enabled": POLICY.is_self_heal_enabled(),
+                "self_heal_enabled": POLICY.is_self_heal_enabled(),
                 "counts": {
-                    "wire_logs": len(logs),
-                    "anomalies": len(anomalies),
-                    "experiment_sessions": len(sessions),
+                    "wire_logs": total_wire,
+                    "anomalies": total_anomalies,
+                    "experiment_sessions": total_sessions,
                     "schema_baselines": len(schemas),
                 },
                 "wire_logs": logs,
