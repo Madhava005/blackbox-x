@@ -42,7 +42,7 @@ python -m app.simulate
 * **Stage 1:** Healthy baseline checkout flag evaluations & analytics.
 * **Stage 2:** Nested user trait & query-string PII leaks (`email`, `phone`, `ip`).
 * **Stage 3:** Broken experiment telemetry (missing env keys, ephemeral UUIDs, negative counts).
-* **Stage 4:** Remote config type mutation (`str -> dict/int`) triggering schema-drift alerts.
+* **Stage 4:** Remote config type mutation (`str -> dict/int) triggering schema-drift alerts.
 
 ### 3. Audit via Rich CLI or Live Dashboard
 ```bash
@@ -76,7 +76,7 @@ docker compose exec blackbox-x pytest -v
 
 ### Active Self-Healing Schema Guard & 1-Command Judge Verification
 
-- **Autonomous Payload Healing (`X-BlackBox-Healed`):** Once BlackBox-X learns a feature flag baseline type (e.g., `str`), unexpected type mutations (`str -> dict/int`) are intercepted in real time, logged (`SCHEMA_DRIFT_DETECTED` + `SCHEMA_DRIFT_HEALED`), and replaced on the wire with the last-known-good value so client SDKs never crash.
+- **Autonomous Payload Healing (`X-BlackBox-Healed`):** Once BlackBox-X learns a feature flag baseline type (e.g., `str`), unexpected type mutations (`str -> dict/int) are intercepted in real time, logged (`SCHEMA_DRIFT_DETECTED` + `SCHEMA_DRIFT_HEALED`), and replaced on the wire with the last-known-good value so client SDKs never crash.
 - **Live `/dashboard` Controls:** Toggle **PII FIREWALL** (`REDACT MODE` vs `403 STRICT BLOCK`) and **SCHEMA HEALER** (`HEAL ON` vs `PASS-THRU`) live without restarting the proxy.
 - **1-Command Judge Verification:** `python -m app.cli --verify`
 
