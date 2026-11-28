@@ -37,7 +37,7 @@ docker compose up -d --build
 
 ### 2. Run the 4-Stage Traffic & Drift Simulator
 ```bash
-python -m app.simulate
+docker compose exec blackbox-x python -m app.simulate
 ```
 * **Stage 1:** Healthy baseline checkout flag evaluations & analytics.
 * **Stage 2:** Nested user trait & query-string PII leaks (`email`, `phone`, `ip`).
@@ -46,7 +46,7 @@ python -m app.simulate
 
 ### 3. Audit via Rich CLI or Live Dashboard
 ```bash
-python -m app.cli
+docker compose exec blackbox-x python -m app.cli
 ```
 Open **`http://localhost:9000/dashboard`** to filter streams by port (`:9000` vs `:9080`in Dashboard), inspect sanitized payloads in the **Wire Payload Inspector**, or toggle **PII FIREWALL** between `REDACT MODE` and `403 STRICT BLOCK`.
 
@@ -78,7 +78,7 @@ docker compose exec blackbox-x pytest -v
 
 - **Autonomous Payload Healing (`X-BlackBox-Healed`):** Once BlackBox-X learns a feature flag baseline type (e.g., `str`), unexpected type mutations (`str -> dict/int) are intercepted in real time, logged (`SCHEMA_DRIFT_DETECTED` + `SCHEMA_DRIFT_HEALED`), and replaced on the wire with the last-known-good value so client SDKs never crash.
 - **Live `/dashboard` Controls:** Toggle **PII FIREWALL** (`REDACT MODE` vs `403 STRICT BLOCK`) and **SCHEMA HEALER** (`HEAL ON` vs `PASS-THRU`) live without restarting the proxy.
-- **1-Command Judge Verification:** `python -m app.cli --verify`
+- **1-Command Judge Verification:** `docker compose exec blackbox-x python -m app.cli --verify`
 
 ## Upstream Flagsmith Contribution
 
